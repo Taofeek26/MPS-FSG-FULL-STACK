@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="description" content="MPS FSG — Frontend Data Requirements Analysis: every endpoint, shape, and data point the web app expects from the backend." />
+<title>MPS FSG — Frontend Data Requirements</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --teal: #00BD9D;
+    --teal-deep: #0D796C;
+    --teal-soft: #CCFBF1;
+    --teal-hover: #009B85;
+    --ink: #0F172A;
+    --sub: #475569;
+    --muted: #64748B;
+    --line: #E2E8F0;
+    --panel: #F1F5F9;
+    --bg: #F8FAFC;
+    --card: #FFFFFF;
+    --radius-card: 14px;
+    --radius-pill: 999px;
+    --shadow: 0 1px 2px rgba(15,23,42,0.04), 0 4px 16px rgba(15,23,42,0.06);
+    --shadow-hover: 0 6px 28px rgba(15,23,42,0.12);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    color: var(--ink);
+    background: radial-gradient(1200px 600px at 80% -10%, rgba(0,189,157,0.08), transparent 60%), var(--panel);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 40px 24px 64px; }
+
+  /* Header */
+  .top { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:44px; }
+  .brand { display:flex; align-items:center; gap:14px; }
+  .logo-chip { background:#fff; border:1px solid var(--line); border-radius:10px; padding:8px 14px; box-shadow:var(--shadow); }
+  .logo-chip img { height:26px; width:auto; display:block; }
+  .brand-text b { font-size:15px; font-weight:700; letter-spacing:-0.01em; }
+  .brand-text span { display:block; font-size:12px; color:var(--sub); margin-top:1px; }
+
+  /* Hero */
+  .hero { margin-bottom:36px; }
+  .eyebrow { font-size:12px; font-weight:700; letter-spacing:0.16em; text-transform:uppercase; color:var(--teal-deep); }
+  .hero h1 { font-size:clamp(28px,4vw,40px); font-weight:800; letter-spacing:-0.02em; margin:8px 0 10px; }
+  .hero p { font-size:15px; color:var(--sub); max-width:700px; line-height:1.6; }
+
+  /* Stats */
+  .stats { display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap:16px; margin:28px 0 36px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:var(--radius-card); padding:22px 20px; text-align:center; box-shadow:var(--shadow); position:relative; overflow:hidden; }
+  .stat::before { content:""; position:absolute; inset:0 0 auto 0; height:4px; background:linear-gradient(90deg, var(--teal), var(--teal-deep)); }
+  .stat-val { font-size:32px; font-weight:800; color:var(--teal-deep); line-height:1; margin-top:4px; }
+  .stat-lbl { font-size:11px; color:var(--muted); margin-top:4px; text-transform:uppercase; letter-spacing:0.05em; }
+
+  /* Sections */
+  h2 { font-size:22px; font-weight:700; margin:48px 0 20px; padding-bottom:10px; border-bottom:2px solid var(--teal); letter-spacing:-0.01em; }
+  h3 { font-size:16px; font-weight:700; color:var(--teal-deep); margin:28px 0 12px; }
+
+  /* Cards */
+  .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius-card); padding:24px; margin-bottom:18px; box-shadow:var(--shadow); }
+  .card.info { border-left:4px solid var(--teal); }
+
+  /* Table */
+  .tbl-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th { background:var(--panel); padding:10px 12px; text-align:left; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); border-bottom:2px solid var(--line); white-space:nowrap; }
+  tbody td { padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tbody tr:hover { background:#F0FDFA; }
+
+  /* Method badges */
+  .method { font-size:10px; font-weight:700; padding:3px 7px; border-radius:4px; display:inline-block; text-align:center; min-width:44px; }
+  .get { background:#D1FAE5; color:#059669; }
+  .post { background:#DBEAFE; color:#2563EB; }
+  .put, .patch { background:#FEF3C7; color:#D97706; }
+  .delete { background:#FEE2E2; color:#DC2626; }
+
+  /* Scoping tags */
+  .tag { font-size:10px; font-weight:600; padding:2px 8px; border-radius:var(--radius-pill); display:inline-block; white-space:nowrap; }
+  .tag-site { background:#E0E7FF; color:#4338CA; }
+  .tag-claim { background:var(--teal-soft); color:var(--teal-deep); }
+  .tag-unscoped { background:var(--panel); color:var(--muted); }
+
+  /* Code */
+  code { background:var(--panel); padding:2px 6px; border-radius:3px; font-size:12px; font-family:'SF Mono','Fira Code',monospace; }
+  .code-block { display:block; padding:14px 18px; background:var(--panel); border-radius:8px; margin:10px 0; font-size:12px; line-height:1.7; }
+
+  /* Callout */
+  .callout { background:#FFFBEB; border-left:4px solid #F59E0B; padding:14px 18px; border-radius:4px; margin:16px 0; font-size:13px; }
+  .callout.info { background:var(--teal-soft); border-left-color:var(--teal); }
+
+  /* TOC */
+  .toc { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 28px; }
+  .toc a { font-size:12px; font-weight:500; color:var(--teal-deep); text-decoration:none; padding:6px 14px; border:1px solid var(--line); border-radius:var(--radius-pill); transition:all 0.15s; }
+  .toc a:hover { background:var(--teal-soft); border-color:var(--teal); }
+
+  /* Footer */
+  footer { margin-top:48px; font-size:12px; color:var(--muted); display:flex; gap:8px; flex-wrap:wrap; align-items:center; border-top:1px solid var(--line); padding-top:20px; }
+  footer .dot { width:3px; height:3px; border-radius:50%; background:var(--muted); opacity:0.5; }
+
+  /* Links */
+  a { color:var(--teal-deep); }
+  li { margin:4px 0; font-size:14px; color:var(--sub); line-height:1.6; }
+
+  p { font-size:14px; color:var(--sub); line-height:1.7; margin-bottom:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- HEADER -->
+<header class="top">
+  <div class="brand">
+    <div class="logo-chip">
+      <img src="https://www.mpsgrp.com/wp-content/uploads/2024/02/mps-group-logo.png" alt="MPS Group" />
+    </div>
+    <div class="brand-text">
+      <b>FSG Platform Explorers</b>
+      <span>Facilities Services · Backend Data Contract</span>
+    </div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="eyebrow">Technical Analysis &nbsp;·&nbsp; 2026-07-23</div>
+  <h1>Frontend → Backend Data Contract</h1>
+  <p>
+    Complete mapping of every endpoint, request shape, response shape, and scoping rule
+    the MPS FSG web frontend expects from the backend. Derived from the Next.js 16 frontend
+    monorepo (OpenAPI schema + API hooks + page components + MSW mock handlers).
+  </p>
+</section>
+
+<!-- STATS -->
+<div class="stats">
+  <div class="stat"><div class="stat-val">46</div><div class="stat-lbl">Active Web Endpoints</div></div>
+  <div class="stat"><div class="stat-val">23</div><div class="stat-lbl">Resource Groups</div></div>
+  <div class="stat"><div class="stat-val">14</div><div class="stat-lbl">Page Routes</div></div>
+  <div class="stat"><div class="stat-val">25+</div><div class="stat-lbl">Mobile/Admin Endpoints</div></div>
+</div>
+
+<div class="card info">
+  <strong>🔗 Dev server:</strong> <code>http://localhost:3099</code> — set <code>NEXT_PUBLIC_USE_MOCK_DATA=true</code> to bypass auth. All data below comes from the MSW mock backend; use any email/password to sign in.
+</div>
+
+<!-- TOC -->
+<div class="toc">
+  <a href="#s1">1. Entity CRUD</a>
+  <a href="#s2">2. Scope Import</a>
+  <a href="#s3">3. Scheduling Engine</a>
+  <a href="#s4">4. Reports</a>
+  <a href="#s5">5. Report Automation</a>
+  <a href="#s6">6. Per-Page Usage</a>
+  <a href="#s7">7. Mobile / Admin</a>
+  <a href="#s8">8. Backend Notes</a>
+</div>
+
+<!-- ===== 1. ENTITY CRUD ===== -->
+<h2 id="s1">1. Entity CRUD — 10 Resource Groups</h2>
+<p>All entity endpoints are <strong>site-scoped</strong> (require <code>X-Site-Id</code> header) except Sites and Customers which are unscoped tenant roots. The <code>X-Allowed-Site-Ids</code> header is injected by auth middleware from Cognito JWT claims.</p>
+
+<h3>Sites &amp; Customers (unscoped)</h3>
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Scope</th><th>Response</th><th>Pages</th></tr></thead>
+<tbody>
+<tr><td><span class="method get">GET</span></td><td><code>/sites</code></td><td><span class="tag tag-unscoped">unscoped</span></td><td><code>{ data: Site[], meta: PageMeta }</code></td><td>Dashboard, Scope, Scheduling, Reports, Builder</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/sites/{siteId}</code></td><td><span class="tag tag-unscoped">unscoped</span></td><td><code>Site</code></td><td>(defined, unused in pages)</td></tr>
+<tr><td><span class="method post">POST</span></td><td><code>/sites</code></td><td><span class="tag tag-unscoped">unscoped</span></td><td><code>Site</code></td><td>—</td></tr>
+<tr><td><span class="method patch">PATCH</span></td><td><code>/sites/{siteId}</code></td><td><span class="tag tag-unscoped">unscoped</span></td><td><code>Site</code></td><td>—</td></tr>
+<tr><td><span class="method delete">DELETE</span></td><td><code>/sites/{siteId}</code></td><td><span class="tag tag-unscoped">unscoped</span></td><td>204</td><td>—</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/customers</code></td><td><span class="tag tag-unscoped">unscoped</span></td><td><code>{ data: Customer[], meta }</code></td><td>—</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Contracts, Areas, Lines, Shifts (site-scoped)</h3>
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Scope</th><th>Used On</th></tr></thead>
+<tbody>
+<tr><td><span class="method get">GET</span></td><td><code>/contracts</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>(schema only)</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/contract-areas</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>Scheduling (all tabs)</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/contract-areas</code></td><td><span class="tag tag-claim">empty X-Site-Id</span></td><td>Reports (AdHoc — all-sites)</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/lines</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>Scheduling (Shifts)</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/shifts</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>Scheduling (Occurrences, Shifts)</td></tr>
+<tr><td><span class="method post">POST</span></td><td><code>/shifts</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>Scheduling (Shifts — create)</td></tr>
+<tr><td><span class="method put">PUT</span></td><td><code>/shifts/{shiftId}</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>Scheduling (Shifts — edit)</td></tr>
+<tr><td><span class="method delete">DELETE</span></td><td><code>/shifts/{shiftId}</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>Scheduling (Shifts — delete)</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Personnel, Coverage, Blackouts, Task Templates, Ad-Hoc (site-scoped)</h3>
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Scope</th><th>Used On</th></tr></thead>
+<tbody>
+<tr><td><span class="method get">GET</span></td><td><code>/personnel</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>Scheduling (Occurrences, Shifts)</td></tr>
+<tr><td><span class="method post">POST</span></td><td><code>/personnel</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>Scheduling (Shifts — add)</td></tr>
+<tr><td><span class="method delete">DELETE</span></td><td><code>/personnel/{id}</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>Scheduling (Shifts — remove)</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/coverage-assignments</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>Scheduling (Shifts — matrix)</td></tr>
+<tr><td><span class="method post">POST</span></td><td><code>/coverage-assignments</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>Scheduling (Shifts — assign)</td></tr>
+<tr><td><span class="method delete">DELETE</span></td><td><code>/coverage-assignments/{id}</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>Scheduling (Shifts — remove)</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/blackout-dates</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>Scheduling (Blackout tab)</td></tr>
+<tr><td><span class="method post">POST</span></td><td><code>/blackout-dates</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>Scheduling (Blackout tab)</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/task-templates</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>Scope, Scheduling (Occurrences)</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/ad-hoc-tasks</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>Scope page</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/ad-hoc-tasks</code></td><td><span class="tag tag-claim">empty X-Site-Id</span></td><td>Reports (AdHoc — all-sites)</td></tr>
+<tr><td><span class="method post">POST</span></td><td><code>/ad-hoc-tasks</code></td><td><span class="tag tag-site">X-Site-Id</span></td><td>Scope (create)</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- ===== 2. SCOPE IMPORT ===== -->
+<h2 id="s2">2. Scope Import</h2>
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Body</th><th>Response</th></tr></thead>
+<tbody>
+<tr>
+  <td><span class="method post">POST</span></td>
+  <td><code>/scope:import</code></td>
+  <td><code>{ dryRun?, keyStrategy?, rows: ScopeImportRow[] }</code></td>
+  <td><code>{ dryRun?, inserts, updates, skips, errors: { index, message, field? }[] }</code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Excel SOW import pipeline. The frontend sends parsed rows; the backend seeds the full hierarchy (Sites → Contracts → Areas → Lines → Templates → Schedules). <code>dryRun=true</code> runs validation without writes.</p>
+
+<!-- ===== 3. SCHEDULING ===== -->
+<h2 id="s3">3. Scheduling Engine</h2>
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Response Shape</th><th>Used On</th></tr></thead>
+<tbody>
+<tr><td><span class="method get">GET</span></td><td><code>/task-schedules</code></td><td style="font-size:12px"><code>{ data: Task[], meta }</code> — windowed by <code>dueFrom</code>/<code>dueTo</code>, filterable by <code>status</code>/<code>areaId</code>/<code>shiftId</code></td><td>Occurrences tab</td></tr>
+<tr><td><span class="method patch">PATCH</span></td><td><code>/task-schedules/{id}</code></td><td style="font-size:12px"><code>Task</code> — cancel with <code>{ status:"canceled", cancelReason }</code></td><td>Occurrences tab</td></tr>
+<tr><td><span class="method post">POST</span></td><td><code>/task-schedules:regenerate</code></td><td style="font-size:12px"><code>{ new, removed, preserved }</code> — diff summary</td><td>Occurrences tab</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/task-schedules:burndown</code></td><td style="font-size:12px"><code>Burndown { baseline, actual, projectedEoy, expected, behindAhead, series[], drill[] }</code></td><td>Burndown tab</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/task-schedules:density</code></td><td style="font-size:12px"><code>OccurrenceDensity</code> — per-day counts for calendar heatmap</td><td>Occurrences tab</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- ===== 4. REPORTS ===== -->
+<h2 id="s4">4. Reports — 6 Types</h2>
+<p>All report endpoints support <strong>dual scoping</strong>: single-site (<code>X-Site-Id</code>) or all-sites fan-out (empty header → server fans out over <code>X-Allowed-Site-Ids</code>).</p>
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Response Shape</th><th>Pages</th></tr></thead>
+<tbody>
+<tr><td><span class="method get">GET</span></td><td><code>/reports/completion</code></td><td style="font-size:12px"><code>SiteCompletion[]</code> — <code>{ total, completed, canceled, pending, overdue, completionRate, byShift[], byCategory[] }</code></td><td>Dashboard, Reports (all cats), Automation</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/reports/audit</code></td><td style="font-size:12px"><code>AuditRow[]</code> — occurrence-grain cancellation rows with reason codes</td><td>Reports (Exceptions, AdHoc)</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/reports/trend</code></td><td style="font-size:12px"><code>TrendPoint[]</code> — monthly/weekly completion % time series</td><td>Dashboard, Reports (Completion)</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/reports/drill</code></td><td style="font-size:12px"><code>DrillNode[]</code> — hierarchical completion drill-down</td><td>Reports (Completion)</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/reports/manhours</code></td><td style="font-size:12px"><code>ManHoursRow[]</code> — per-area budgeted vs canceled hours</td><td>Reports (ManHours)</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/reports/powerbi</code></td><td style="font-size:12px"><code>PowerBiExport { grain, facts[], dimensions[], refresh }</code></td><td>Admin Reporting</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- ===== 5. AUTOMATION ===== -->
+<h2 id="s5">5. Report Automation (claim-scoped)</h2>
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Used On</th></tr></thead>
+<tbody>
+<tr><td><span class="method get">GET</span></td><td><code>/reports/templates</code></td><td>Report Builder (List, New)</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/reports/templates/{id}</code></td><td>Report Builder (Edit)</td></tr>
+<tr><td><span class="method post">POST</span></td><td><code>/reports/templates</code></td><td>Report Builder (save-as-new)</td></tr>
+<tr><td><span class="method put">PUT</span></td><td><code>/reports/templates/{id}</code></td><td>Report Builder (save)</td></tr>
+<tr><td><span class="method delete">DELETE</span></td><td><code>/reports/templates/{id}</code></td><td>Report Builder (delete)</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/reports/schedules</code></td><td>Automation (Delivery)</td></tr>
+<tr><td><span class="method post">POST</span></td><td><code>/reports/schedules</code></td><td>Automation (Delivery — create)</td></tr>
+<tr><td><span class="method put">PUT</span></td><td><code>/reports/schedules/{id}</code></td><td>Automation (Delivery — edit)</td></tr>
+<tr><td><span class="method delete">DELETE</span></td><td><code>/reports/schedules/{id}</code></td><td>Automation (Delivery — delete)</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/reports/threshold-rules</code></td><td>Automation (Alerts, Delivery)</td></tr>
+<tr><td><span class="method post">POST</span></td><td><code>/reports/threshold-rules</code></td><td>Automation (Alerts — create)</td></tr>
+<tr><td><span class="method get">GET</span></td><td><code>/reports/deliveries</code></td><td>Automation (Delivery — log)</td></tr>
+<tr><td><span class="method post">POST</span></td><td><code>/reports/deliveries</code></td><td>Automation (Delivery — send now)</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- ===== 6. PER-PAGE ===== -->
+<h2 id="s6">6. Per-Page API Usage</h2>
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>Page</th><th>Endpoints</th><th>Count</th></tr></thead>
+<tbody>
+<tr><td><strong>Dashboard</strong></td><td style="font-size:12px"><code>GET /sites</code>, <code>GET /reports/completion</code>, <code>GET /reports/trend</code></td><td>3</td></tr>
+<tr><td><strong>Scope</strong></td><td style="font-size:12px"><code>GET /sites</code>, <code>GET /task-templates</code>, <code>GET /ad-hoc-tasks</code>, <code>POST /scope:import</code>, <code>POST /ad-hoc-tasks</code></td><td>5</td></tr>
+<tr><td><strong>Scheduling — Burndown</strong></td><td style="font-size:12px"><code>GET /task-schedules:burndown</code>, <code>GET /contract-areas</code></td><td>2</td></tr>
+<tr><td><strong>Scheduling — Occurrences</strong></td><td style="font-size:12px"><code>GET /task-schedules:density</code>, <code>/contract-areas</code>, <code>/task-templates</code>, <code>/shifts</code>, <code>/personnel</code>, <code>/task-schedules</code>, <code>PATCH /task-schedules/{id}</code>, <code>POST /task-schedules:regenerate</code></td><td>8</td></tr>
+<tr><td><strong>Scheduling — Shifts</strong></td><td style="font-size:12px"><code>GET /sites</code>, <code>/contract-areas</code>, <code>/lines</code>, <code>/shifts</code>, <code>/personnel</code>, <code>/coverage-assignments</code> + 6 mutations</td><td>13</td></tr>
+<tr><td><strong>Scheduling — Blackout</strong></td><td style="font-size:12px"><code>GET /sites</code>, <code>/blackout-dates</code>, <code>POST /blackout-dates</code></td><td>3</td></tr>
+<tr><td><strong>Reports — Completion</strong></td><td style="font-size:12px"><code>GET /sites</code>, <code>/reports/completion</code>, <code>/reports/trend</code>, <code>/reports/drill</code></td><td>4</td></tr>
+<tr><td><strong>Reports — Exceptions</strong></td><td style="font-size:12px"><code>GET /sites</code>, <code>/reports/completion</code>, <code>/reports/audit</code></td><td>3</td></tr>
+<tr><td><strong>Reports — Man-Hours</strong></td><td style="font-size:12px"><code>GET /sites</code>, <code>/reports/manhours</code>, <code>/reports/completion</code></td><td>3</td></tr>
+<tr><td><strong>Reports — Ad-Hoc</strong></td><td style="font-size:12px"><code>GET /sites</code>, <code>/ad-hoc-tasks</code>, <code>/contract-areas</code>, <code>/reports/audit</code>, <code>/reports/completion</code></td><td>5</td></tr>
+<tr><td><strong>Automation — Delivery</strong></td><td style="font-size:12px"><code>GET /sites</code>, <code>/reports/schedules</code>, <code>/deliveries</code>, <code>/threshold-rules</code>, <code>/completion</code> + 6 mutations</td><td>11</td></tr>
+<tr><td><strong>Automation — Alerts</strong></td><td style="font-size:12px"><code>GET /threshold-rules</code>, <code>/completion</code> + 4 mutations</td><td>6</td></tr>
+<tr><td><strong>Report Builder</strong></td><td style="font-size:12px"><code>GET /sites</code>, <code>/templates</code>, <code>/templates/{id}</code> + 3 mutations</td><td>5</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- ===== 7. MOBILE / ADMIN ===== -->
+<h2 id="s7">7. Schema-Only Paths (Mobile Field App / Future Admin)</h2>
+<div class="tbl-wrap">
+<table>
+<thead><tr><th>Path</th><th>Likely Owner</th></tr></thead>
+<tbody>
+<tr><td><code>/task-completions</code>, <code>/task-completions/{id}</code></td><td>Mobile field app — task completion CRUD</td></tr>
+<tr><td><code>/validation-flags</code></td><td>Mobile field app — flagging/photo verification</td></tr>
+<tr><td><code>/shift-check-ins</code></td><td>Mobile field app — shift check-in/out</td></tr>
+<tr><td><code>/photos/presign</code></td><td>Mobile field app — presigned S3 upload URLs</td></tr>
+<tr><td><code>/sync</code></td><td>Mobile field app — offline batch sync</td></tr>
+<tr><td><code>/users</code>, <code>/users/{userId}</code></td><td>Admin user management (future)</td></tr>
+<tr><td><code>/user-roles</code></td><td>Admin role management (future)</td></tr>
+<tr><td><code>/task-categories</code></td><td>Admin task category CRUD (future)</td></tr>
+<tr><td><code>/notifications</code></td><td>Push notification list</td></tr>
+<tr><td><code>/ai/recommendations</code></td><td>AI scheduling assistant</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- ===== 8. BACKEND NOTES ===== -->
+<h2 id="s8">8. Backend Implementation Notes</h2>
+
+<div class="card info" style="margin-bottom:16px;">
+<h3 style="margin-top:0;">🔑 Dual Scoping Pattern (Critical)</h3>
+<p>Every reporting endpoint must handle two modes:<br>
+<strong>Site-scoped:</strong> <code>X-Site-Id</code> header present → filter to that site only.<br>
+<strong>Claim-scoped:</strong> <code>X-Site-Id</code> empty → read <code>X-Allowed-Site-Ids</code> from auth middleware, fan out over all caller-accessible sites.</p>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+<h3 style="margin-top:0;">🏗️ Entity Hierarchy</h3>
+<div class="code-block">
+Site → Contract → ContractArea → Line → TaskTemplate → TaskSchedule<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↘ Shift → Personnel → CoverageAssignment<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↘ BlackoutDate<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↘ AdHocTask (separate from recurring schedules)
+</div>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+<h3 style="margin-top:0;">📊 What the Backend Must Compute</h3>
+<ul>
+<li><strong>Occurrence generation:</strong> TaskTemplates × frequency → daily occurrences across contract period, respecting Shift operating days and Blackout dates</li>
+<li><strong>Burn-down:</strong> Baseline (total expected) vs Actual (completed) over time, projected end-of-year</li>
+<li><strong>Density:</strong> Per-day occurrence counts for calendar heatmaps</li>
+<li><strong>Regeneration:</strong> Diff-based — when scope changes, compute new schedule, return <code>{ new, removed, preserved }</code></li>
+<li><strong>Completion:</strong> Aggregate total/completed/canceled/pending/overdue per site, by shift and category</li>
+<li><strong>Audit:</strong> Occurrence-grain cancellation rows with reason codes</li>
+<li><strong>Trend:</strong> Monthly/weekly completion % time series vs 90% target</li>
+<li><strong>Drill:</strong> Hierarchical breakdown (Site → Area → Category → Status)</li>
+<li><strong>Man-Hours:</strong> Per-area budgeted vs canceled hours</li>
+</ul>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+<h3 style="margin-top:0;">🔐 Auth Requirements</h3>
+<ul>
+<li>Cognito JWT with <code>site_ids</code> claim injected by PreTokenGenerator Lambda</li>
+<li><code>X-Allowed-Site-Ids</code> derived from JWT claims by auth middleware</li>
+<li>RLS (Row-Level Security) at DB layer: <code>SET LOCAL app.current_site_ids</code></li>
+<li>Every endpoint validates scoping — never return cross-site data</li>
+</ul>
+</div>
+
+<div class="callout info">
+<strong>🔗 Reference files:</strong><br>
+<code>packages/types/src/schema.d.ts</code> — complete OpenAPI contract (5,265 lines)<br>
+<code>packages/api/src/mocks/handlers.ts</code> — MSW mock handlers (executable reference)<br>
+<code>packages/api/src/hooks/*.ts</code> — typed query/mutation hooks per resource<br>
+<code>apps/web/app/(app)/*/page.tsx</code> — page-level data fetching patterns
+</div>
+
+<footer>
+  <span>White Label Resell · MPS FSG</span>
+  <span class="dot"></span>
+  <span>Frontend Data Contract Analysis</span>
+  <span class="dot"></span>
+  <span>Next.js 16 · React 19 · 46 web endpoints</span>
+</footer>
+
+</div>
+</body>
+</html>

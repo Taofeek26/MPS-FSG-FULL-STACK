@@ -1,0 +1,9 @@
+[submodule "mps-fsg"]
+	path = mps-fsg
+	url = git@github.com:seocontentai/mps-fsg.git
+[submodule "mps-fsg-frontend"]
+	path = mps-fsg-frontend
+	url = git@github.com:seocontentai/mps-fsg.git
+[submodule "mps-fsg-explorer"]
+	path = mps-fsg-explorer
+	url = https://github.com/seocontentai/mps-fsg-explorer
