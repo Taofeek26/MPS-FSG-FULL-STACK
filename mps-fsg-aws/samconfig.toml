@@ -1,0 +1,55 @@
+version = 0.1
+
+[default]
+[default.globals]
+[default.globals.parameters]
+stack_name = "fsg-prod"
+template_file = "template.yaml"
+
+[default.build]
+# Build functions using SAM's built-in Python builder
+# function_build_method = "makefile"
+
+[default.deploy]
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
+confirm_changeset = true
+disable_rollback = false
+resolve_s3 = true
+region = "us-east-1"
+tags = "Project=FSG Environment=prod ManagedBy=SAM"
+
+[default.deploy.parameters]
+Environment = "prod"
+DBUsername = "fsg_admin"
+DBPassword = "{{resolve:secretsmanager:FSG-prod-DatabaseCredentials:SecretString:password}}"
+CognitoDomainPrefix = "fsg-prod"
+
+# Optional feature toggles — set to "true" to enable
+EnableAI = "false"
+EnableSES = "false"
+EnableMicrosoftSSO = "false"
+
+# Dev/Staging environments
+stack_name = "mps-fsg-app"
+resolve_s3 = true
+s3_prefix = "mps-fsg-app"
+confirm_changeset = true
+capabilities = "CAPABILITY_NAMED_IAM"
+parameter_overrides = "Environment=\"dev\" CognitoDomainPrefix=\"fsg-prod\" EnableAI=\"true\" EnableSES=\"true\" EnableMicrosoftSSO=\"true\" SESFromAddress=\"reports@mpsgroup.com\""
+image_repositories = []
+
+[default.global.parameters]
+region = "us-east-1"
+[dev.deploy]
+stack_name = "fsg-dev"
+region = "us-east-1"
+
+[dev.deploy.parameters]
+Environment = "dev"
+
+[test.deploy]
+stack_name = "fsg-test"
+region = "us-east-1"
+
+[test.deploy.parameters]
+Environment = "test"

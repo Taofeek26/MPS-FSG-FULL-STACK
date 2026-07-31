@@ -1,0 +1,1371 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  MPS FSG — Scope Tracking & Validation Platform
+  9 consolidated Lambda services · PostgreSQL RDS · Cognito auth · API Gateway
+  Frontend contract: 46 web endpoints + 25+ mobile/admin endpoints
+  Environment: {Env} · Region: us-east-1 · Deploy Phase: 6-stage sequenced
+
+# =============================================================================
+# GLOBALS
+# =============================================================================
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [arm64]
+    Timeout: 30
+    MemorySize: 512
+    Tracing: Active
+    Environment:
+      Variables:
+        REGION: !Ref AWS::Region
+        LOG_LEVEL: INFO
+        DB_SECRET_NAME: !Ref DatabaseSecret
+        DB_HOST: !GetAtt RDSInstance.Endpoint.Address
+        DB_NAME: fsg_production
+        DB_PORT: "5432"
+    VpcConfig:
+      SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+# =============================================================================
+# PARAMETERS
+# =============================================================================
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, test, prod]
+    Description: Deployment environment
+
+  DBUsername:
+    Type: String
+    Default: fsg_admin
+    MinLength: 8
+    NoEcho: true
+    Description: PostgreSQL master username
+
+  DBPassword:
+    Type: String
+    MinLength: 16
+    NoEcho: true
+    Default: "{{resolve:secretsmanager:FSG-prod-DatabaseCredentials:SecretString:password}}"
+    Description: PostgreSQL master password
+
+  CognitoDomainPrefix:
+    Type: String
+    Default: fsg-prod
+    Description: Cognito hosted UI domain prefix
+
+  EnableAI:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Enable AI Service (NAT Gateway required)
+
+  EnableSES:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Enable scheduled SES report delivery
+
+  EnableMicrosoftSSO:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Enable Microsoft Entra ID federated SSO
+
+  SESFromAddress:
+    Type: String
+    Default: reports@mpsgroup.com
+    Description: SES verified sender email address
+
+Conditions:
+  EnableAICondition: !Equals [!Ref EnableAI, "true"]
+  EnableSESCondition: !Equals [!Ref EnableSES, "true"]
+  EnableMicrosoftSSOCondition: !Equals [!Ref EnableMicrosoftSSO, "true"]
+
+# =============================================================================
+# PHASE 1: NETWORK FOUNDATION
+# =============================================================================
+Resources:
+
+  # --- VPC ---
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: !Sub FSG-${Environment}-VPC
+        - Key: Project
+          Value: FSG
+        - Key: Environment
+          Value: !Ref Environment
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub FSG-${Environment}-IGW
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # --- Subnets (6) ---
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub FSG-${Environment}-PrivateSubnet1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub FSG-${Environment}-PrivateSubnet2
+
+  NATSubnet1:
+    Type: AWS::EC2::Subnet
+    Condition: EnableAICondition
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub FSG-${Environment}-NATSubnet1
+
+  NATSubnet2:
+    Type: AWS::EC2::Subnet
+    Condition: EnableAICondition
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.4.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub FSG-${Environment}-NATSubnet2
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.5.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub FSG-${Environment}-PublicSubnet1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.6.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub FSG-${Environment}-PublicSubnet2
+
+  # --- NAT Gateway ---
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub FSG-${Environment}-NATGateway
+
+  # --- Route Tables ---
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub FSG-${Environment}-PrivateRouteTable
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub FSG-${Environment}-PublicRouteTable
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # --- Security Groups ---
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: FSG Lambda outbound HTTPS and PostgreSQL
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS to AWS endpoints
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 10.0.0.0/16
+          Description: PostgreSQL access
+      Tags:
+        - Key: Name
+          Value: !Sub FSG-${Environment}-LambdaSecurityGroup
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: FSG RDS PostgreSQL Lambda access only
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+          Description: Lambda PostgreSQL access
+      Tags:
+        - Key: Name
+          Value: !Sub FSG-${Environment}-RDSSecurityGroup
+
+  # --- VPC Endpoints ---
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PrivateRouteTable
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: "s3:*"
+            Resource: "*"
+
+  SecretsManagerEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.secretsmanager
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
+      PrivateDnsEnabled: true
+
+  SNSEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.sns
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
+      PrivateDnsEnabled: true
+
+  CloudWatchLogsEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.logs
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
+      PrivateDnsEnabled: true
+
+  # --- DB Subnet Group ---
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Private subnets for RDS
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub FSG-${Environment}-DBSubnetGroup
+
+# =============================================================================
+# PHASE 2: IDENTITY & SECRETS
+# =============================================================================
+
+
+
+  
+  # --- KMS Key for encryption at rest ---
+  FSGKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: FSG platform encryption key
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: "*"
+
+  # --- Secrets Manager ---
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub FSG-${Environment}-DatabaseCredentials
+      Description: PostgreSQL RDS connection credentials
+      KmsKeyId: !Ref FSGKMSKey
+      GenerateSecretString:
+        SecretStringTemplate: !Sub |
+          {"username": "${DBUsername}", "host": "", "port": "5432", "dbname": "fsg_production", "engine": "postgres"}
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\{}[]()#$%^&*+=~`|;:<>,'
+      Tags:
+        - Key: Project
+          Value: FSG
+
+  AIAPISecret:
+    Condition: EnableAICondition
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub FSG-${Environment}-AIAPIKey
+      Description: AI API key
+      KmsKeyId: !Ref FSGKMSKey
+      SecretString: '{"api_key": "PLACEHOLDER"}'
+      Tags:
+        - Key: Project
+          Value: FSG
+
+  CognitoAppSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub FSG-${Environment}-CognitoAppClientSecret
+      Description: Power BI app client credentials
+      KmsKeyId: !Ref FSGKMSKey
+      SecretString: '{"client_id": "", "client_secret": ""}'
+      Tags:
+        - Key: Project
+          Value: FSG
+
+  SESCredentialsSecret:
+    Condition: EnableSESCondition
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub FSG-${Environment}-SESReportingCredentials
+      Description: SES credentials
+      KmsKeyId: !Ref FSGKMSKey
+      SecretString: '{"ses_from_address": "reports@mpsgroup.com"}'
+      Tags:
+        - Key: Project
+          Value: FSG
+
+
+# --- Cognito User Pool ---
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub FSG-${Environment}-UserPool
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+      MfaConfiguration: OPTIONAL
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      UserPoolAddOns:
+        AdvancedSecurityMode: ENFORCED
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: false
+        - Name: name
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      Tags:
+        - Key: Project
+          Value: FSG
+        - Key: Environment
+          Value: !Ref Environment
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref CognitoDomainPrefix
+      UserPoolId: !Ref UserPool
+
+  # --- Cognito Groups (4-tier access model) ---
+  PlatformAdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: PlatformAdmin
+      Description: Full system access — ~3 users
+      Precedence: 1
+      UserPoolId: !Ref UserPool
+
+  SiteManagerGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: SiteManager
+      Description: Assigned site(s) full access — ~13 users
+      Precedence: 2
+      UserPoolId: !Ref UserPool
+
+  LeadSupervisorGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: LeadSupervisor
+      Description: Site scheduling and validation — ~13 users
+      Precedence: 3
+      UserPoolId: !Ref UserPool
+
+  ShiftSupervisorGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: ShiftSupervisor
+      Description: Assigned site + shift validation only — ~100 users
+      Precedence: 4
+      UserPoolId: !Ref UserPool
+
+  # --- Cognito App Clients ---
+  MobileAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub FSG-${Environment}-MobileClient
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+      AccessTokenValidity: 8
+      IdTokenValidity: 8
+      RefreshTokenValidity: 30
+      TokenValidityUnits:
+        AccessToken: hours
+        IdToken: hours
+        RefreshToken: days
+      UserPoolId: !Ref UserPool
+
+  WebAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub FSG-${Environment}-WebClient
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_PASSWORD_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - openid
+        - email
+        - profile
+      CallbackURLs:
+        - https://fsg.mpsgroup.com/auth/callback
+      LogoutURLs:
+        - https://fsg.mpsgroup.com/logout
+      UserPoolId: !Ref UserPool
+
+  PowerBIAppClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub FSG-${Environment}-PowerBIClient
+      GenerateSecret: true
+      AllowedOAuthFlows:
+        - client_credentials
+      AllowedOAuthScopes:
+        - openid
+        - reporting/read
+      UserPoolId: !Ref UserPool
+
+# =============================================================================
+# PHASE 3: DATA LAYER
+# =============================================================================
+
+  # --- RDS PostgreSQL ---
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub fsg-${Environment}-db
+      Engine: postgres
+      EngineVersion: "16.14"
+      DBInstanceClass: db.t3.small
+      MultiAZ: true
+      AllocatedStorage: "20"
+      MaxAllocatedStorage: 100
+      StorageType: gp3
+      StorageEncrypted: true
+      KmsKeyId: !Ref FSGKMSKey
+      DBName: fsg_production
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      Port: "5432"
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 30
+      PreferredBackupWindow: "03:00-04:00"
+      PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
+      EnableCloudwatchLogsExports:
+        - postgresql
+        - upgrade
+      MonitoringInterval: 60
+      EnablePerformanceInsights: true
+      PerformanceInsightsRetentionPeriod: 7
+      Tags:
+        - Key: Project
+          Value: FSG
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: ManagedBy
+          Value: CloudFormation
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+
+  # --- Database Schema Init (Custom Resource via Lambda) ---
+  DBSchemaInitRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: DBSchemaInitPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref DatabaseSecret
+
+  DBSchemaInitFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub FSG-${Environment}-DBSchemaInit
+      Handler: app.lambda_handler
+      CodeUri: src/db_schema_init/
+      MemorySize: 256
+      Timeout: 120
+      Role: !GetAtt DBSchemaInitRole.Arn
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+
+  DBSchemaInit:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt DBSchemaInitFunction.Arn
+    DependsOn:
+      - RDSInstance
+      - DBSchemaInitRole
+
+  # --- S3 Buckets ---
+  PhotosBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub fsg-${Environment}-photos-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref FSGKMSKey
+            BucketKeyEnabled: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: [GET, PUT]
+            AllowedOrigins: ["*"]
+            MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 90
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 365
+      Tags:
+        - Key: Project
+          Value: FSG
+        - Key: DataClassification
+          Value: confidential
+
+  SOWImportsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub fsg-${Environment}-sow-imports-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref FSGKMSKey
+            BucketKeyEnabled: true
+      Tags:
+        - Key: Project
+          Value: FSG
+        - Key: RetentionPolicy
+          Value: indefinite
+
+  ReportsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub fsg-${Environment}-reports-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Suspended
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref FSGKMSKey
+            BucketKeyEnabled: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteReportsAfter7Days
+            Status: Enabled
+            ExpirationInDays: 7
+      Tags:
+        - Key: Project
+          Value: FSG
+        - Key: RetentionPolicy
+          Value: 7-days
+
+  # --- UserPool Permission for PreTokenGeneration ---
+
+# =============================================================================
+# PHASE 4: SNS & EVENTBRIDGE
+# =============================================================================
+
+  # --- SNS Monitoring Topic ---
+  MonitoringTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub FSG-${Environment}-MonitoringTopic
+      DisplayName: FSG Platform Alerts — notify PlatformAdmin
+      Tags:
+        - Key: Project
+          Value: FSG
+
+  # --- EventBridge Rules ---
+  WeeklyReportRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub FSG-${Environment}-WeeklyReport
+      Description: Trigger weekly report delivery every Monday at 8am UTC
+      ScheduleExpression: cron(0 8 ? * MON *)
+      State: !If [EnableSESCondition, ENABLED, DISABLED]
+      Targets:
+        - Arn: !GetAtt NotificationDeliveryService.Arn
+          Id: WeeklyReportTarget
+
+  MonthlyReportRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub FSG-${Environment}-MonthlyReport
+      Description: Trigger monthly report delivery on the 1st at 8am UTC
+      ScheduleExpression: cron(0 8 1 * ? *)
+      State: !If [EnableSESCondition, ENABLED, DISABLED]
+      Targets:
+        - Arn: !GetAtt NotificationDeliveryService.Arn
+          Id: MonthlyReportTarget
+
+  WeeklyReportPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref NotificationDeliveryService
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt WeeklyReportRule.Arn
+
+  MonthlyReportPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref NotificationDeliveryService
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MonthlyReportRule.Arn
+
+# =============================================================================
+# PHASE 5: LAMBDA FUNCTIONS (9 consolidated services)
+# =============================================================================
+
+  # --- IAM Roles (per service, least-privilege) ---
+
+  # 1. SecurityAuthService Role
+  SecurityAuthServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub FSG-${Environment}-SecurityAuthService-ExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: SecurityAuthPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-data:ExecuteStatement
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecret
+
+  # 2. FieldOperationsService Role
+  FieldOperationsServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub FSG-${Environment}-FieldOperationsService-ExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: FieldOperationsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-data:ExecuteStatement
+                  - rds-data:BatchExecuteStatement
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecret
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub ${PhotosBucket.Arn}/photos/*
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt AnalyticsReportingService.Arn
+
+  # 3. SiteConfigService Role
+  SiteConfigServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub FSG-${Environment}-SiteConfigService-ExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: SiteConfigPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-data:ExecuteStatement
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecret
+              - Effect: Allow
+                Action:
+                  - events:PutRule
+                  - events:PutTargets
+                  - events:DeleteRule
+                  - events:RemoveTargets
+                Resource: !Sub arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/FSG-${Environment}-ShiftStartNotification-*
+              - Effect: Allow
+                Action:
+                  - cognito-idp:AdminCreateUser
+                  - cognito-idp:AdminAddUserToGroup
+                  - cognito-idp:AdminRemoveUserFromGroup
+                  - cognito-idp:AdminDisableUser
+                  - cognito-idp:AdminListGroupsForUser
+                  - cognito-idp:AdminGetUser
+                Resource: !GetAtt UserPool.Arn
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !Sub ${ReportsBucket.Arn}/qr/*
+              - Effect: Allow
+                Action:
+                  - s3:HeadObject
+                Resource: !Sub ${ReportsBucket.Arn}/*
+
+  # 4. ScopeLifecycleService Role
+  ScopeLifecycleServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub FSG-${Environment}-ScopeLifecycleService-ExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: ScopeLifecyclePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-data:ExecuteStatement
+                  - rds-data:BatchExecuteStatement
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecret
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                Resource: !GetAtt SOWImportsBucket.Arn
+
+  # 5. AnalyticsReportingService Role
+  AnalyticsReportingServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub FSG-${Environment}-AnalyticsReportingService-ExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: AnalyticsReportingPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-data:ExecuteStatement
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecret
+                  - !Ref CognitoAppSecret
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub ${ReportsBucket.Arn}/*
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt NotificationDeliveryService.Arn
+
+  # 6. NotificationDeliveryService Role
+  NotificationDeliveryServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub FSG-${Environment}-NotificationDeliveryService-ExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: NotificationDeliveryPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-data:ExecuteStatement
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecret
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource:
+                  - !Sub arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:*
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub ${ReportsBucket.Arn}/*
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawMessage
+                Resource: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/mpsgroup.com
+
+  # 7. SyncService Role
+  SyncServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub FSG-${Environment}-SyncService-ExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: SyncPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-data:ExecuteStatement
+                  - rds-data:BatchExecuteStatement
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecret
+
+  # 8. PhotoService Role
+  PhotoServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub FSG-${Environment}-PhotoService-ExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: PhotoServicePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-data:ExecuteStatement
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecret
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:HeadObject
+                Resource: !Sub ${PhotosBucket.Arn}/photos/*
+
+  # 9. AIService Role (conditional)
+  AIServiceRole:
+    Condition: EnableAICondition
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub FSG-${Environment}-AIService-ExecutionRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: AIServicePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-data:ExecuteStatement
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecret
+                  - !Ref AIAPISecret
+
+  # ===== LAMBDA FUNCTION DEFINITIONS =====
+
+  # --- 1. SecurityAuthService (PreTokenGenerator + Lambda Authorizer) ---
+  SecurityAuthService:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub FSG-${Environment}-Security-SecurityAuthService
+      Handler: app.lambda_handler
+      CodeUri: src/security/security_auth_service/
+      MemorySize: 256
+      Timeout: 10
+      Role: !GetAtt SecurityAuthServiceRole.Arn
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+          DB_SECRET_NAME: !Sub FSG-${Environment}-DatabaseCredentials
+          DB_HOST: !GetAtt RDSInstance.Endpoint.Address
+          DB_NAME: fsg_production
+          DB_PORT: "5432"
+          REGION: !Ref AWS::Region
+          USER_POOL_ID: !Ref UserPool
+
+  # --- 2. FieldOperationsService ---
+  FieldOperationsService:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub FSG-${Environment}-Core-FieldOperationsService
+      Handler: app.lambda_handler
+      CodeUri: src/core/field_operations_service/
+      MemorySize: 512
+      Timeout: 30
+      Role: !GetAtt FieldOperationsServiceRole.Arn
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Environment:
+        Variables:
+          REGION: !Ref AWS::Region
+          LOG_LEVEL: INFO
+          DB_SECRET_NAME: !Sub FSG-${Environment}-DatabaseCredentials
+          DB_HOST: !GetAtt RDSInstance.Endpoint.Address
+          DB_NAME: fsg_production
+          DB_PORT: "5432"
+          PHOTOS_BUCKET: !Ref PhotosBucket
+          ANALYTICS_FUNCTION_ARN: !GetAtt AnalyticsReportingService.Arn
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: ""
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub ${PhotosBucket.Arn}/photos/*
+            - Effect: Allow
+              Action:
+                - lambda:InvokeFunction
+              Resource: !GetAtt AnalyticsReportingService.Arn
+
+  # --- 3. SiteConfigService ---
+  SiteConfigService:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub FSG-${Environment}-Core-SiteConfigService
+      Handler: app.lambda_handler
+      CodeUri: src/core/site_config_service/
+      MemorySize: 512
+      Timeout: 30
+      Role: !GetAtt SiteConfigServiceRole.Arn
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          COGNITO_USER_POOL_ID: !Ref UserPool
+          REPORTS_BUCKET: !Ref ReportsBucket
+
+  # --- 4. ScopeLifecycleService ---
+  ScopeLifecycleService:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub FSG-${Environment}-Core-ScopeLifecycleService
+      Handler: app.lambda_handler
+      CodeUri: src/core/scope_lifecycle_service/
+      MemorySize: 1024
+      Timeout: 300
+      Role: !GetAtt ScopeLifecycleServiceRole.Arn
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          IMPORTS_BUCKET: !Ref SOWImportsBucket
+
+  # --- 5. AnalyticsReportingService ---
+  AnalyticsReportingService:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub FSG-${Environment}-Analytics-AnalyticsReportingService
+      Handler: app.lambda_handler
+      CodeUri: src/analytics/analytics_reporting_service/
+      MemorySize: 512
+      Timeout: 60
+      Role: !GetAtt AnalyticsReportingServiceRole.Arn
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          REPORTS_BUCKET: !Ref ReportsBucket
+          PRESIGNED_URL_EXPIRY_SECONDS: "604800"
+          NOTIFICATION_FUNCTION_ARN: !GetAtt NotificationDeliveryService.Arn
+          COGNITO_APP_SECRET_NAME: !Ref CognitoAppSecret
+
+  # --- 6. NotificationDeliveryService ---
+  NotificationDeliveryService:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub FSG-${Environment}-Comm-NotificationDeliveryService
+      Handler: app.lambda_handler
+      CodeUri: src/comm/notification_delivery_service/
+      MemorySize: 256
+      Timeout: 60
+      Role: !GetAtt NotificationDeliveryServiceRole.Arn
+      Environment:
+        Variables:
+          REPORTS_BUCKET: !Ref ReportsBucket
+          SES_FROM_ADDRESS: !Ref SESFromAddress
+          SES_REGION: !Ref AWS::Region
+
+  # --- 7. SyncService ---
+  SyncService:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub FSG-${Environment}-Comm-SyncService
+      Handler: app.lambda_handler
+      CodeUri: src/comm/sync_service/
+      MemorySize: 512
+      Timeout: 60
+      Role: !GetAtt SyncServiceRole.Arn
+
+  # --- 8. PhotoService ---
+  PhotoService:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub FSG-${Environment}-Data-PhotoService
+      Handler: app.lambda_handler
+      CodeUri: src/data/photo_service/
+      MemorySize: 256
+      Timeout: 30
+      Role: !GetAtt PhotoServiceRole.Arn
+
+  # --- 9. AIService (conditional on AI features enabled) ---
+  AIService:
+    Condition: EnableAICondition
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub FSG-${Environment}-Core-AIService
+      Handler: app.lambda_handler
+      CodeUri: src/core/ai_service/
+      MemorySize: 512
+      Timeout: 30
+      Role: !GetAtt AIServiceRole.Arn
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref NATSubnet1
+          - !Ref NATSubnet2
+      Environment:
+        Variables:
+          AI_SECRET_NAME: !Sub FSG-${Environment}-AIAPIKey
+          AI_MAX_TOKENS: "2048"
+
+# =============================================================================
+# =============================================================================
+# PHASE 6: API GATEWAY — HTTP API (ALL frontend routes via OpenAPI DefinitionBody)
+# =============================================================================
+
+  HttpApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/apigateway/FSG-${Environment}-Comm-HttpApi
+      RetentionInDays: 30
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: prod
+      AccessLogSettings:
+        DestinationArn: !GetAtt HttpApiLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","routeKey":"$context.routeKey","status":"$context.status"}'
+      DefinitionUri: ./openapi.yaml
+
+# =============================================================================
+# OUTPUTS
+# =============================================================================
+
+Outputs:
+  ApiEndpoint:
+    Description: HTTP API Gateway endpoint URL
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+
+  CognitoUserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref UserPool
+
+  CognitoWebClientId:
+    Description: Cognito Web App Client ID
+    Value: !Ref WebAppClient
+
+  CognitoMobileClientId:
+    Description: Cognito Mobile App Client ID
+    Value: !Ref MobileAppClient
+
+  DatabaseEndpoint:
+    Description: RDS PostgreSQL endpoint
+    Value: !GetAtt RDSInstance.Endpoint.Address
+
+  DatabasePort:
+    Description: RDS PostgreSQL port
+    Value: !GetAtt RDSInstance.Endpoint.Port
+
+  PhotosBucketName:
+    Description: S3 bucket for validation photos
+    Value: !Ref PhotosBucket
+
+  ReportsBucketName:
+    Description: S3 bucket for generated reports
+    Value: !Ref ReportsBucket
+
+  SOWImportsBucketName:
+    Description: S3 bucket for SOW import archives
+    Value: !Ref SOWImportsBucket
+
+  VpcId:
+    Description: VPC ID
+    Value: !Ref VPC
+
+  SecurityAuthServiceArn:
+    Description: Lambda authorizer function ARN
+    Value: !GetAtt SecurityAuthService.Arn

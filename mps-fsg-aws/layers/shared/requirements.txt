@@ -1,0 +1,8 @@
+# MPS FSG — Shared Lambda Layer
+# Common utilities: DB connection, logging, error classes, route dispatch
+# Used by all 9 domain services
+
+psycopg2-binary>=2.9.9,<3.0
+boto3>=1.34.0
+botocore>=1.34.0
+python-json-logger>=2.0.7

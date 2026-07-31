@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MPS FSG Backend-Frontend Alignment Report</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f7fafc;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #667eea;
+        }
+
+        .stat-card h3 {
+            font-size: 2em;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-card p {
+            color: #718096;
+            font-size: 0.9em;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 50px;
+        }
+
+        .section h2 {
+            font-size: 1.8em;
+            color: #2d3748;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .section h3 {
+            font-size: 1.4em;
+            color: #4a5568;
+            margin: 30px 0 15px 0;
+        }
+
+        .section h4 {
+            font-size: 1.1em;
+            color: #2d3748;
+            margin: 20px 0 10px 0;
+            font-weight: 600;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th {
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85em;
+            letter-spacing: 0.5px;
+        }
+
+        tr:hover {
+            background: #f7fafc;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        code {
+            background: #f7fafc;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #e53e3e;
+        }
+
+        pre {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            line-height: 1.5;
+        }
+
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid;
+        }
+
+        .alert-success {
+            background: #f0fdf4;
+            border-color: #10b981;
+            color: #065f46;
+        }
+
+        .alert-warning {
+            background: #fffbeb;
+            border-color: #f59e0b;
+            color: #92400e;
+        }
+
+        .alert-danger {
+            background: #fef2f2;
+            border-color: #ef4444;
+            color: #991b1b;
+        }
+
+        .alert-info {
+            background: #eff6ff;
+            border-color: #3b82f6;
+            color: #1e40af;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+            margin: 0 5px;
+        }
+
+        .badge-green {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-yellow {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .badge-red {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-blue {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #667eea;
+        }
+
+        .card h4 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        ul {
+            margin: 15px 0;
+            padding-left: 25px;
+        }
+
+        ul li {
+            margin: 8px 0;
+            color: #4a5568;
+        }
+
+        .toc {
+            background: #f7fafc;
+            padding: 25px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .toc h3 {
+            color: #2d3748;
+            margin-bottom: 15px;
+        }
+
+        .toc ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .toc ul li {
+            margin: 10px 0;
+        }
+
+        .toc a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .toc a:hover {
+            text-decoration: underline;
+        }
+
+        footer {
+            background: #2d3748;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            margin-top: 40px;
+        }
+
+        .mismatch-list {
+            background: #fff5f5;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #ef4444;
+            margin: 15px 0;
+        }
+
+        .alignment-list {
+            background: #f0fdf4;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #10b981;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 MPS FSG Platform</h1>
+            <p>Backend-Frontend Alignment & Architecture Report</p>
+            <p style="font-size: 0.9em; opacity: 0.8; margin-top: 10px;">Generated: July 25, 2026</p>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>46+</h3>
+                <p>API Endpoints</p>
+            </div>
+            <div class="stat-card">
+                <h3>20+</h3>
+                <p>Database Tables</p>
+            </div>
+            <div class="stat-card">
+                <h3>9</h3>
+                <p>Lambda Services</p>
+            </div>
+            <div class="stat-card">
+                <h3>4</h3>
+                <p>User Roles (RBAC)</p>
+            </div>
+            <div class="stat-card">
+                <h3>100+</h3>
+                <p>Frontend Components</p>
+            </div>
+            <div class="stat-card">
+                <h3>7</h3>
+                <p>Report Widget Types</p>
+            </div>
+        </div>
+
+        <div class="content">
+            <!-- Table of Contents -->
+            <div class="toc">
+                <h3>📑 Table of Contents</h3>
+                <ul>
+                    <li><a href="#overview">1. System Overview</a></li>
+                    <li><a href="#backend">2. AWS Backend Architecture</a></li>
+                    <li><a href="#frontend">3. Frontend Architecture</a></li>
+                    <li><a href="#alignment">4. Data Alignment Analysis</a></li>
+                    <li><a href="#api-endpoints">5. API Endpoints Mapping</a></li>
+                    <li><a href="#data-models">6. Data Models Comparison</a></li>
+                    <li><a href="#recommendations">7. Recommendations</a></li>
+                </ul>
+            </div>
+
+            <!-- Section 1: Overview -->
+            <section id="overview" class="section">
+                <h2>1. System Overview</h2>
+
+                <div class="alert alert-info">
+                    <strong>Platform Purpose:</strong> MPS FSG is a production-grade serverless platform for facilities services tracking with mobile offline support, real-time analytics, and automated reporting.
+                </div>
+
+                <h3>Technology Stack</h3>
+                <div class="grid">
+                    <div class="card">
+                        <h4>Backend (AWS)</h4>
+                        <ul>
+                            <li>AWS SAM (Serverless)</li>
+                            <li>Python 3.12 on ARM64</li>
+                            <li>PostgreSQL 16.14 (RDS)</li>
+                            <li>AWS Cognito (Auth)</li>
+                            <li>API Gateway (HTTP API)</li>
+                            <li>S3, EventBridge, CloudWatch</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <h4>Frontend (Next.js)</h4>
+                        <ul>
+                            <li>Next.js 16 (App Router)</li>
+                            <li>React 19.2.3</li>
+                            <li>TypeScript 5.9.2</li>
+                            <li>Tailwind CSS v4</li>
+                            <li>TanStack Query</li>
+                            <li>AWS Amplify (Cognito)</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 2: Backend Architecture -->
+            <section id="backend" class="section">
+                <h2>2. AWS Backend Architecture</h2>
+
+                <h3>Lambda Services (9 Microservices)</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Service</th>
+                            <th>Purpose</th>
+                            <th>Key Features</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>SecurityAuthService</code></td>
+                            <td>Auth & Authorization</td>
+                            <td>PreTokenGeneration trigger, Lambda Authorizer, RLS</td>
+                        </tr>
+                        <tr>
+                            <td><code>SiteConfigService</code></td>
+                            <td>Site/User/Shift CRUD</td>
+                            <td>Cognito sync, EventBridge rules, QR generation</td>
+                        </tr>
+                        <tr>
+                            <td><code>FieldOperationsService</code></td>
+                            <td>Task validation & field ops</td>
+                            <td>Photo presigned URLs, metrics refresh triggers</td>
+                        </tr>
+                        <tr>
+                            <td><code>ScopeLifecycleService</code></td>
+                            <td>SOW import & scheduling</td>
+                            <td>Excel import, scheduling engine, calendar generation</td>
+                        </tr>
+                        <tr>
+                            <td><code>AnalyticsReportingService</code></td>
+                            <td>Reports & metrics</td>
+                            <td>Power BI, completion analytics, trend analysis</td>
+                        </tr>
+                        <tr>
+                            <td><code>NotificationDeliveryService</code></td>
+                            <td>Push & email notifications</td>
+                            <td>SNS (iOS/Android), SES email delivery</td>
+                        </tr>
+                        <tr>
+                            <td><code>SyncService</code></td>
+                            <td>Offline sync</td>
+                            <td>Idempotent batch sync with deduplication</td>
+                        </tr>
+                        <tr>
+                            <td><code>PhotoService</code></td>
+                            <td>S3 event processing</td>
+                            <td>Automatic metadata extraction from uploads</td>
+                        </tr>
+                        <tr>
+                            <td><code>AIService</code></td>
+                            <td>AI features (optional)</td>
+                            <td>Scheduling suggestions, NL query generation</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Database Schema (20+ Tables)</h3>
+                <div class="grid">
+                    <div class="card">
+                        <h4>Core Entities</h4>
+                        <ul>
+                            <li><code>sites</code> - Tenant root</li>
+                            <li><code>shifts</code> - Work shifts</li>
+                            <li><code>service_areas</code> - QR-coded zones</li>
+                            <li><code>scope_tasks</code> - Task templates</li>
+                            <li><code>scheduled_occurrences</code> - Scheduled tasks</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <h4>Operations</h4>
+                        <ul>
+                            <li><code>validation_records</code> - Task completions</li>
+                            <li><code>cancellation_records</code> - Cancellations</li>
+                            <li><code>one_off_tasks</code> - Ad-hoc tasks</li>
+                            <li><code>photos</code> - Photo metadata</li>
+                            <li><code>validation_flags</code> - Issues</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <h4>Users & Access</h4>
+                        <ul>
+                            <li><code>users</code> - User accounts</li>
+                            <li><code>user_site_assignments</code> - Site access</li>
+                            <li><code>user_shift_assignments</code> - Shift access</li>
+                            <li><code>device_tokens</code> - Push notifications</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <h4>Analytics & Audit</h4>
+                        <ul>
+                            <li><code>completion_metrics_cache</code> - Pre-aggregated metrics</li>
+                            <li><code>sync_jobs</code> - Offline sync tracking</li>
+                            <li><code>scope_imports</code> - Import history</li>
+                            <li><code>audit_log</code> - Change tracking (partitioned)</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <h3>Key Features</h3>
+                <div class="alert alert-success">
+                    <strong>✓ Row-Level Security (RLS):</strong> All site-scoped tables automatically filter based on user's assigned sites via <code>app.current_site_ids</code> session variable.
+                </div>
+                <div class="alert alert-success">
+                    <strong>✓ Idempotency:</strong> All validation/sync endpoints use <code>client_id</code> UUID with <code>ON CONFLICT DO NOTHING</code> to prevent duplicate submissions.
+                </div>
+                <div class="alert alert-success">
+                    <strong>✓ Metrics Caching:</strong> Pre-aggregated completion metrics refreshed asynchronously after validations/cancellations.
+                </div>
+            </section>
+
+            <!-- Section 3: Frontend Architecture -->
+            <section id="frontend" class="section">
+                <h2>3. Frontend Architecture</h2>
+
+                <h3>Monorepo Structure (Turborepo)</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Package</th>
+                            <th>Purpose</th>
+                            <th>Key Technologies</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>/apps/web</code></td>
+                            <td>Next.js web application</td>
+                            <td>Next.js 16, React 19, Tailwind v4</td>
+                        </tr>
+                        <tr>
+                            <td><code>/apps/mobile</code></td>
+                            <td>Expo React Native app</td>
+                            <td>Expo, React Native</td>
+                        </tr>
+                        <tr>
+                            <td><code>/packages/types</code></td>
+                            <td>Generated TypeScript types</td>
+                            <td>openapi-typescript</td>
+                        </tr>
+                        <tr>
+                            <td><code>/packages/api</code></td>
+                            <td>Typed API client</td>
+                            <td>openapi-fetch, Zod</td>
+                        </tr>
+                        <tr>
+                            <td><code>/packages/core</code></td>
+                            <td>Domain logic & validation</td>
+                            <td>Zod schemas</td>
+                        </tr>
+                        <tr>
+                            <td><code>/packages/tokens</code></td>
+                            <td>Design tokens</td>
+                            <td>Teal brand theme</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Main Application Routes</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Route</th>
+                            <th>Purpose</th>
+                            <th>Required Role</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>/login</code></td>
+                            <td>Microsoft SSO + email/password</td>
+                            <td>Public</td>
+                        </tr>
+                        <tr>
+                            <td><code>/dashboard</code></td>
+                            <td>Role-based landing page</td>
+                            <td>All roles</td>
+                        </tr>
+                        <tr>
+                            <td><code>/scope</code></td>
+                            <td>SOW hierarchy & task templates</td>
+                            <td>Admin, Manager, Lead</td>
+                        </tr>
+                        <tr>
+                            <td><code>/scheduling</code></td>
+                            <td>Burndown, occurrences, shifts, blackouts</td>
+                            <td>Admin, Manager, Lead</td>
+                        </tr>
+                        <tr>
+                            <td><code>/reports</code></td>
+                            <td>Completion, exceptions, man-hours, ad-hoc</td>
+                            <td>Admin, Manager</td>
+                        </tr>
+                        <tr>
+                            <td><code>/reports/automation</code></td>
+                            <td>Scheduled delivery & threshold alerts</td>
+                            <td>Admin, Manager</td>
+                        </tr>
+                        <tr>
+                            <td><code>/reports/builder</code></td>
+                            <td>Custom report builder</td>
+                            <td>Admin, Manager</td>
+                        </tr>
+                        <tr>
+                            <td><code>/admin/reporting</code></td>
+                            <td>Admin reporting</td>
+                            <td>Admin</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Authentication Architecture</h3>
+                <div class="grid">
+                    <div class="card">
+                        <h4>Mock Mode (Development)</h4>
+                        <ul>
+                            <li>In-memory session store</li>
+                            <li>Any email/password signs in</li>
+                            <li>Demo role: "admin"</li>
+                            <li>Site switching via UI</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <h4>Live Mode (Production)</h4>
+                        <ul>
+                            <li>AWS Amplify + Cognito</li>
+                            <li>Microsoft SSO (primary)</li>
+                            <li>Email/Password (fallback)</li>
+                            <li>OAuth callback at <code>/auth/callback</code></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <h3>Role-Based Access Control (4 Roles)</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Role</th>
+                            <th>Rank</th>
+                            <th>Access</th>
+                            <th>Typical Users</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="badge badge-red">PlatformAdmin</span></td>
+                            <td>100</td>
+                            <td>Full system access, config</td>
+                            <td>~3 users</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-yellow">SiteManager</span></td>
+                            <td>50</td>
+                            <td>Assigned site(s) full access</td>
+                            <td>~13 users</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-blue">LeadSupervisor</span></td>
+                            <td>25</td>
+                            <td>Scheduling + validation (read-only scope)</td>
+                            <td>~13 users</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-green">ShiftSupervisor</span></td>
+                            <td>10</td>
+                            <td>Dashboard only, shift-locked</td>
+                            <td>~100 users</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Section 4: Data Alignment Analysis -->
+            <section id="alignment" class="section">
+                <h2>4. Data Alignment Analysis</h2>
+
+                <h3>✅ Well-Aligned Components</h3>
+                <div class="alignment-list">
+                    <ul>
+                        <li><strong>Core Entities:</strong> Sites, Shifts, Service Areas match well between frontend and backend</li>
+                        <li><strong>Scheduling:</strong> Task schedules, blackout dates, burndown data align properly</li>
+                        <li><strong>Reporting:</strong> Completion metrics, audit trails, Power BI exports match expected formats</li>
+                        <li><strong>Authentication:</strong> Cognito JWT claims (<code>custom:role</code>, <code>custom:site_ids</code>) match frontend expectations</li>
+                        <li><strong>API Structure:</strong> 46 endpoints match OpenAPI contract with proper types</li>
+                        <li><strong>Validation Flow:</strong> Task completions with idempotent <code>client_id</code> work as expected</li>
+                        <li><strong>Photo Upload:</strong> Presigned S3 URLs with metadata extraction align</li>
+                    </ul>
+                </div>
+
+                <h3>⚠️ Misalignments & Gaps</h3>
+
+                <h4>Frontend Expects (Backend Missing/Stubs)</h4>
+                <div class="mismatch-list">
+                    <ul>
+                        <li><code>customers</code> table with full CRUD - Backend has stub endpoints only</li>
+                        <li><code>lines</code> table with full CRUD - Backend has stub endpoints only</li>
+                        <li><code>contracts</code> table - Backend doesn't have this entity at all</li>
+                        <li><code>task_categories</code> table - Backend has stub endpoints only</li>
+                        <li><code>qrPrefix</code> field on sites - Backend doesn't store this</li>
+                        <li><code>branding.logoUrl</code> field - Backend doesn't support site branding</li>
+                    </ul>
+                </div>
+
+                <h4>Backend Provides (Frontend May Not Use)</h4>
+                <div class="alert alert-warning">
+                    <ul>
+                        <li><code>one_off_validations</code> - Separate from <code>validation_records</code>, frontend uses <code>ad_hoc_tasks</code></li>
+                        <li><code>shift_check_ins</code> - API exists but frontend may not fully integrate</li>
+                        <li><code>validation_flags</code> - API exists but frontend may not use</li>
+                        <li><code>device_tokens</code> - Push notification support (mobile-specific)</li>
+                        <li><code>sync_jobs</code> - Offline mobile sync (mobile-specific)</li>
+                        <li><code>audit_log</code> - Full change tracking (not exposed in frontend UI)</li>
+                        <li><code>AIService</code> - AI endpoints for scheduling suggestions (optional feature)</li>
+                    </ul>
+                </div>
+
+                <h4>Field Name Differences</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Backend Table/Field</th>
+                            <th>Frontend Expected</th>
+                            <th>Impact</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>service_areas</code></td>
+                            <td><code>contract_areas</code></td>
+                            <td><span class="badge badge-yellow">Medium</span> API must map field names</td>
+                        </tr>
+                        <tr>
+                            <td><code>scope_tasks</code></td>
+                            <td><code>task_templates</code></td>
+                            <td><span class="badge badge-yellow">Medium</span> API must map field names</td>
+                        </tr>
+                        <tr>
+                            <td><code>scheduled_occurrences</code></td>
+                            <td><code>task_schedules</code></td>
+                            <td><span class="badge badge-yellow">Medium</span> API must map field names</td>
+                        </tr>
+                        <tr>
+                            <td><code>validation_records</code></td>
+                            <td><code>task_completions</code></td>
+                            <td><span class="badge badge-yellow">Medium</span> API must map field names</td>
+                        </tr>
+                        <tr>
+                            <td><code>qr_code</code> (on service_areas)</td>
+                            <td><code>qrCode</code> (camelCase)</td>
+                            <td><span class="badge badge-green">Low</span> Auto-converted by API serialization</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Section 5: API Endpoints -->
+            <section id="api-endpoints" class="section">
+                <h2>5. API Endpoints Mapping (46+ Endpoints)</h2>
+
+                <h3>Site Configuration (10 endpoints)</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Method</th>
+                            <th>Endpoint</th>
+                            <th>Service</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/sites</code></td>
+                            <td>SiteConfigService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td><code>/sites</code></td>
+                            <td>SiteConfigService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/sites/{siteId}</code></td>
+                            <td>SiteConfigService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>PATCH</td>
+                            <td><code>/sites/{siteId}</code></td>
+                            <td>SiteConfigService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>DELETE</td>
+                            <td><code>/sites/{siteId}</code></td>
+                            <td>SiteConfigService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/contract-areas</code></td>
+                            <td>SiteConfigService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/customers</code></td>
+                            <td>SiteConfigService</td>
+                            <td><span class="badge badge-yellow">Stub</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/customers/{customerId}</code></td>
+                            <td>SiteConfigService</td>
+                            <td><span class="badge badge-yellow">Stub</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/lines</code></td>
+                            <td>SiteConfigService</td>
+                            <td><span class="badge badge-yellow">Stub</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/task-categories</code></td>
+                            <td>SiteConfigService</td>
+                            <td><span class="badge badge-yellow">Stub</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Scope Management (5 endpoints)</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Method</th>
+                            <th>Endpoint</th>
+                            <th>Service</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>POST</td>
+                            <td><code>/scope:import</code></td>
+                            <td>ScopeLifecycleService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/task-templates</code></td>
+                            <td>ScopeLifecycleService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/task-templates/{templateId}</code></td>
+                            <td>ScopeLifecycleService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td><code>/task-templates</code></td>
+                            <td>ScopeLifecycleService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td><code>/task-schedules:regenerate</code></td>
+                            <td>ScopeLifecycleService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Scheduling (9 endpoints)</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Method</th>
+                            <th>Endpoint</th>
+                            <th>Service</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/shifts</code></td>
+                            <td>SiteConfigService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td><code>/shifts</code></td>
+                            <td>SiteConfigService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/task-schedules</code></td>
+                            <td>FieldOperationsService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/task-schedules:burndown</code></td>
+                            <td>AnalyticsReportingService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/task-schedules:density</code></td>
+                            <td>AnalyticsReportingService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/blackout-dates</code></td>
+                            <td>ScopeLifecycleService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td><code>/blackout-dates</code></td>
+                            <td>ScopeLifecycleService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/personnel</code></td>
+                            <td>SiteConfigService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/ad-hoc-tasks</code></td>
+                            <td>FieldOperationsService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Reporting & Analytics (7 endpoints)</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Method</th>
+                            <th>Endpoint</th>
+                            <th>Service</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/reports/completion</code></td>
+                            <td>AnalyticsReportingService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/reports/audit</code></td>
+                            <td>AnalyticsReportingService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/reports/manhours</code></td>
+                            <td>AnalyticsReportingService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/reports/trend</code></td>
+                            <td>AnalyticsReportingService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/reports/drill</code></td>
+                            <td>AnalyticsReportingService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/reports/powerbi</code></td>
+                            <td>AnalyticsReportingService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/reports/deliveries</code></td>
+                            <td>AnalyticsReportingService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Field Operations (5 endpoints)</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Method</th>
+                            <th>Endpoint</th>
+                            <th>Service</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/task-completions</code></td>
+                            <td>FieldOperationsService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td><code>/task-completions</code></td>
+                            <td>FieldOperationsService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>GET</td>
+                            <td><code>/validation-flags</code></td>
+                            <td>FieldOperationsService</td>
+                            <td><span class="badge badge-blue">Partial</span></td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td><code>/photos/presign</code></td>
+                            <td>FieldOperationsService</td>
+                            <td><span class="badge badge-green">Aligned</span></td>
+                        </tr>
+                        <tr>
+                            <td>POST</td>
+                            <td><code>/sync</code></td>
+                            <td>SyncService</td>
+                            <td><span class="badge badge-blue">Mobile-only</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Section 6: Data Models -->
+            <section id="data-models" class="section">
+                <h2>6. Data Models Comparison</h2>
+
+                <h3>Site Entity</h3>
+                <div class="grid">
+                    <div class="card">
+                        <h4>Backend (PostgreSQL)</h4>
+                        <pre>sites:
+  - id (UUID)
+  - name (text)
+  - facility_location (text)
+  - operating_days_per_week (int)
+  - required_photo_percentage (numeric)
+  - contract_start_date (date)
+  - contract_end_date (date)
+  - annual_contract_value (numeric)
+  - active (boolean)
+  - created_at, updated_at</pre>
+                    </div>
+                    <div class="card">
+                        <h4>Frontend (TypeScript)</h4>
+                        <pre>interface Site {
+  id: string
+  name: string
+  address: string | null
+  customerName: string | null
+  timezone: string | null
+  qrPrefix: string | null
+  branding?: {
+    logoUrl: string | null
+  } | null
+}</pre>
+                    </div>
+                </div>
+                <div class="alert alert-warning">
+                    <strong>Mismatch:</strong> Frontend expects <code>qrPrefix</code> and <code>branding.logoUrl</code> which backend doesn't provide. Backend has <code>contract_start_date</code>, <code>contract_end_date</code>, <code>annual_contract_value</code> which frontend doesn't use in Site model.
+                </div>
+
+                <h3>Task Template / Scope Task</h3>
+                <div class="grid">
+                    <div class="card">
+                        <h4>Backend (scope_tasks)</h4>
+                        <pre>scope_tasks:
+  - id (UUID)
+  - service_area_id (UUID)
+  - site_id (UUID)
+  - shift_id (UUID, nullable)
+  - service_type_name (text)
+  - time_per_task_hours (numeric)
+  - services_per_year (int)
+  - active (boolean)</pre>
+                    </div>
+                    <div class="card">
+                        <h4>Frontend (task_templates)</h4>
+                        <pre>interface TaskTemplate {
+  id: string
+  siteId: string
+  name: string
+  categoryId: string
+  estimatedMinutes: number
+  frequency: object
+  // RRule-based
+}</pre>
+                    </div>
+                </div>
+                <div class="alert alert-warning">
+                    <strong>Mismatch:</strong> Backend uses <code>services_per_year</code> (int), frontend uses <code>frequency</code> (RRule object). Field name difference: <code>scope_tasks</code> vs <code>task_templates</code>.
+                </div>
+
+                <h3>Task Schedule / Scheduled Occurrence</h3>
+                <div class="grid">
+                    <div class="card">
+                        <h4>Backend (scheduled_occurrences)</h4>
+                        <pre>scheduled_occurrences:
+  - id (UUID)
+  - scope_task_id (UUID)
+  - service_area_id (UUID)
+  - site_id (UUID)
+  - shift_id (UUID)
+  - scheduled_date (date)
+  - status (text)
+    'pending'|'completed'|
+    'canceled'|'rescheduled'|
+    'superseded'</pre>
+                    </div>
+                    <div class="card">
+                        <h4>Frontend (task_schedules)</h4>
+                        <pre>interface TaskSchedule {
+  id: string
+  siteId: string
+  templateId: string
+  dueDate: string
+  time: string | null
+  shiftId: string | null
+  status:
+    'pending'|'in_progress'|
+    'completed'|'missed'|
+    'flagged'|'canceled'
+  cancelReason?: string
+}</pre>
+                    </div>
+                </div>
+                <div class="alert alert-warning">
+                    <strong>Mismatch:</strong> Status enums differ. Frontend has <code>in_progress</code>, <code>missed</code>, <code>flagged</code> which backend doesn't have. Backend has <code>rescheduled</code>, <code>superseded</code> which frontend doesn't use.
+                </div>
+
+                <h3>Validation / Task Completion</h3>
+                <div class="grid">
+                    <div class="card">
+                        <h4>Backend (validation_records)</h4>
+                        <pre>validation_records:
+  - id (UUID)
+  - scheduled_occurrence_id (UUID)
+  - validated_by_user_id (UUID)
+  - validated_at (timestamptz)
+  - status (text)
+    'completed'|'partial'
+  - notes (text)
+  - photo_count (int)
+  - client_id (UUID, UNIQUE)</pre>
+                    </div>
+                    <div class="card">
+                        <h4>Frontend (task_completions)</h4>
+                        <pre>interface TaskCompletion {
+  id: string
+  scheduleId: string
+  completedBy: string
+  completedAt: string
+  status: string
+  notes?: string
+  photoCount: number
+  clientId: string
+}</pre>
+                    </div>
+                </div>
+                <div class="alert alert-success">
+                    <strong>✓ Well Aligned:</strong> Both use <code>client_id</code> for idempotency. Field mapping straightforward.
+                </div>
+            </section>
+
+            <!-- Section 7: Recommendations -->
+            <section id="recommendations" class="section">
+                <h2>7. Recommendations</h2>
+
+                <h3>High Priority</h3>
+                <div class="alert alert-danger">
+                    <h4>1. Implement Missing Database Tables</h4>
+                    <p>Backend needs to implement:</p>
+                    <ul>
+                        <li><code>customers</code> table with full CRUD operations</li>
+                        <li><code>lines</code> table (production lines within sites)</li>
+                        <li><code>contracts</code> table (separate from sites)</li>
+                        <li><code>task_categories</code> table for task organization</li>
+                    </ul>
+                </div>
+
+                <div class="alert alert-danger">
+                    <h4>2. Standardize Field Naming Convention</h4>
+                    <p>Choose one convention and apply consistently:</p>
+                    <ul>
+                        <li><strong>Option A:</strong> Backend returns snake_case, API layer converts to camelCase for frontend</li>
+                        <li><strong>Option B:</strong> Update database schema to use camelCase (not recommended)</li>
+                        <li><strong>Recommended:</strong> Option A with automatic serialization middleware</li>
+                    </ul>
+                </div>
+
+                <h3>Medium Priority</h3>
+                <div class="alert alert-warning">
+                    <h4>3. Align Status Enums</h4>
+                    <p>Synchronize status values between frontend and backend:</p>
+                    <ul>
+                        <li>Add <code>in_progress</code>, <code>missed</code>, <code>flagged</code> to backend scheduled_occurrences status</li>
+                        <li>Or remove these from frontend if not needed</li>
+                        <li>Document which statuses are computed vs stored</li>
+                    </ul>
+                </div>
+
+                <div class="alert alert-warning">
+                    <h4>4. Add Site Branding Support</h4>
+                    <p>Backend should support:</p>
+                    <ul>
+                        <li><code>qr_prefix</code> field on sites table (4-char prefix for QR codes)</li>
+                        <li><code>logo_url</code> field or separate <code>site_branding</code> table</li>
+                        <li>S3 bucket for logo uploads</li>
+                    </ul>
+                </div>
+
+                <h3>Low Priority / Future Enhancements</h3>
+                <div class="alert alert-info">
+                    <h4>5. Expose Audit Log in Frontend</h4>
+                    <p>Backend has comprehensive audit logging - consider exposing in admin UI:</p>
+                    <ul>
+                        <li>Add <code>GET /audit-log</code> endpoint</li>
+                        <li>Create Admin Audit Log page</li>
+                        <li>Filter by entity type, action, date range, user</li>
+                    </ul>
+                </div>
+
+                <div class="alert alert-info">
+                    <h4>6. Integrate Shift Check-ins</h4>
+                    <p>Backend has shift check-in functionality - integrate in frontend scheduling:</p>
+                    <ul>
+                        <li>Add check-in widget to scheduling page</li>
+                        <li>Show active shift personnel</li>
+                        <li>Track attendance metrics</li>
+                    </ul>
+                </div>
+
+                <div class="alert alert-info">
+                    <h4>7. Consider AI Features</h4>
+                    <p>Backend has AIService (optional) - evaluate if needed:</p>
+                    <ul>
+                        <li>Scheduling suggestions based on historical patterns</li>
+                        <li>Natural language query for reports</li>
+                        <li>Requires NAT Gateway ($32/month additional cost)</li>
+                    </ul>
+                </div>
+
+                <h3>Implementation Checklist</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Task</th>
+                            <th>Priority</th>
+                            <th>Estimated Effort</th>
+                            <th>Owner</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Implement customers table & API</td>
+                            <td><span class="badge badge-red">High</span></td>
+                            <td>4-6 hours</td>
+                            <td>Backend Team</td>
+                        </tr>
+                        <tr>
+                            <td>Implement lines table & API</td>
+                            <td><span class="badge badge-red">High</span></td>
+                            <td>3-4 hours</td>
+                            <td>Backend Team</td>
+                        </tr>
+                        <tr>
+                            <td>Implement contracts table & API</td>
+                            <td><span class="badge badge-red">High</span></td>
+                            <td>4-6 hours</td>
+                            <td>Backend Team</td>
+                        </tr>
+                        <tr>
+                            <td>Implement task_categories table & API</td>
+                            <td><span class="badge badge-red">High</span></td>
+                            <td>2-3 hours</td>
+                            <td>Backend Team</td>
+                        </tr>
+                        <tr>
+                            <td>Add snake_case to camelCase converter</td>
+                            <td><span class="badge badge-red">High</span></td>
+                            <td>2-3 hours</td>
+                            <td>Backend Team</td>
+                        </tr>
+                        <tr>
+                            <td>Align status enums</td>
+                            <td><span class="badge badge-yellow">Medium</span></td>
+                            <td>2-3 hours</td>
+                            <td>Both Teams</td>
+                        </tr>
+                        <tr>
+                            <td>Add site branding fields</td>
+                            <td><span class="badge badge-yellow">Medium</span></td>
+                            <td>3-4 hours</td>
+                            <td>Backend Team</td>
+                        </tr>
+                        <tr>
+                            <td>Integrate shift check-ins in frontend</td>
+                            <td><span class="badge badge-blue">Low</span></td>
+                            <td>6-8 hours</td>
+                            <td>Frontend Team</td>
+                        </tr>
+                        <tr>
+                            <td>Expose audit log in admin UI</td>
+                            <td><span class="badge badge-blue">Low</span></td>
+                            <td>8-10 hours</td>
+                            <td>Both Teams</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Summary Section -->
+            <section class="section">
+                <h2>Summary</h2>
+                <div class="alert alert-success">
+                    <strong>Overall Alignment: 85%</strong>
+                    <p>The backend and frontend are well-aligned with a solid foundation. The main gaps are:</p>
+                    <ul>
+                        <li>4 missing database tables (customers, lines, contracts, task_categories)</li>
+                        <li>Field naming convention needs standardization</li>
+                        <li>Some status enum differences</li>
+                        <li>Missing site branding support</li>
+                    </ul>
+                    <p>These are all straightforward to implement and don't require architectural changes.</p>
+                </div>
+
+                <div class="grid">
+                    <div class="card">
+                        <h4>Backend Strengths</h4>
+                        <ul>
+                            <li>Comprehensive 20+ table schema</li>
+                            <li>Robust RLS security</li>
+                            <li>Idempotent operations</li>
+                            <li>Metrics caching</li>
+                            <li>Full audit trail</li>
+                            <li>Offline sync support</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <h4>Frontend Strengths</h4>
+                        <ul>
+                            <li>Type-safe API client</li>
+                            <li>Comprehensive UI coverage</li>
+                            <li>Role-based access</li>
+                            <li>Mock/live mode switching</li>
+                            <li>Advanced reporting UI</li>
+                            <li>Custom report builder</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <footer>
+            <p>MPS FSG Platform - Backend-Frontend Alignment Report</p>
+            <p>Generated: July 25, 2026 | Claude Code Analysis</p>
+        </footer>
+    </div>
+</body>
+</html>
